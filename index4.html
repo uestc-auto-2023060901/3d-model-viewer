@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Viewer</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.166.1/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        // 【修改】我们现在使用 GLTFLoader 来加载 .glb 文件
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xbfd1e5); 
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        // 【新增】为了更好的物理渲染效果，开启色调映射
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+
+        // 【修改】调整光照强度以适应PBR材质
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 3);
+        dirLight.position.set(5, 10, 7.5);
+        scene.add(dirLight);
+
+        const loader = new GLTFLoader();
+        loader.load(
+            // 【你需要修改的地方】把这里的名字换成你自己的GLB文件名
+            './models/青铜神树.glb', 
+            
+            function (gltf) {
+                console.log("GLB 模型加载成功!", gltf);
+                const model = gltf.scene;
+
+                // 自动对焦逻辑（和之前一样）
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                model.position.sub(center);
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const fov = camera.fov * (Math.PI / 180);
+                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                cameraZ *= 1.5;
+                camera.position.set(0, 0, cameraZ);
+                controls.target.set(0, 0, 0);
+                controls.update();
+
+                // 【不再需要】我们不再需要手动替换材质了，GLB会自带正确的材质
+                // object.traverse(...) 
+
+                scene.add(model);
+            },
+            (xhr) => { console.log((xhr.loaded / xhr.total * 100) + '% loaded'); },
+            (error) => { console.error('GLB 模型加载失败:', error); }
+        );
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // 更新控制器，实现自动旋转和阻尼
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => { /* ...不变... */ });
+    </script>
+</body>
+</html>

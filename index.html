@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FBX Model Viewer</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.166.1/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const scene = new THREE.Scene();
+        // 【新增】给场景一个浅蓝色的背景，不再是纯黑
+        scene.background = new THREE.Color(0xbfd1e5); 
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(100, 200, 300);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 100, 0);
+        controls.update();
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 3);
+        hemiLight.position.set(0, 200, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 3);
+        dirLight.position.set(0, 200, 100);
+        scene.add(dirLight);
+
+        const loader = new FBXLoader();
+        loader.load(
+                './models/07.FBX', // 确认你的模型文件名
+                
+                function (object) {
+                    console.log("FBX 模型加载成功!", object);
+
+                    // --- 【核心修改】让相机自动聚焦模型 ---
+
+                    // 1. 计算模型的边界框，获取其中心点和尺寸
+                    const box = new THREE.Box3().setFromObject(object);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+
+                    // 2. 将模型的中心移动到世界坐标的原点 (0,0,0)
+                    object.position.sub(center);
+
+                    // 3. 计算一个合适的相机距离，确保整个模型都在视野内
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const fov = camera.fov * (Math.PI / 180);
+                    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                    cameraZ *= 1.5; // 再稍微拉远一点，留出边距
+
+                    // 4. 将相机移动到计算出的位置，并看向模型
+                    camera.position.set(0, 0, cameraZ);
+                    
+                    // 5. 更新控制器，让它也围绕模型中心旋转
+                    controls.target.set(0, 0, 0);
+                    controls.update();
+                    
+                    // ----------------------------------------------------
+
+                    // 遍历模型并替换为白色材质（这部分逻辑不变）
+                    object.traverse(function (child) {
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                        }
+                    });
+
+                    scene.add(object);
+                },
+                
+                (xhr) => { console.log((xhr.loaded / xhr.total * 100) + '% loaded'); },
+                (error) => { console.error('FBX 模型加载失败:', error); }
+            );
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
